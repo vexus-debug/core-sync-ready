@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Progress } from "@/components/ui/progress";
-import { ArrowLeft, Phone, Mail, AlertTriangle, User, FileText, Pencil, Camera, Plus, Upload, MessageCircle, ExternalLink } from "lucide-react";
+import { ArrowLeft, Phone, Mail, AlertTriangle, User, FileText, Pencil, Camera, Plus, Upload, MessageCircle, ExternalLink, Receipt, Pill, FlaskConical, Zap } from "lucide-react";
 import {
   usePatientDetail, usePatientVisits, usePatientTreatmentPlans, usePatientInvoices, usePatientPrescriptions,
 } from "@/hooks/usePatientProfile";
@@ -25,12 +25,46 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { EyeRecordsTab } from "@/components/dashboard/eye/EyeRecordsTab";
 import { getClinicTerms } from "@/config/clinicTerminology";
+import { CreateInvoiceDialog } from "@/components/dashboard/CreateInvoiceDialog";
+import { CreatePrescriptionDialog } from "@/components/dashboard/CreatePrescriptionDialog";
+import { CreateLabCaseDialog } from "@/components/dashboard/CreateLabCaseDialog";
+import { toast } from "@/hooks/use-toast";
 
 const statusStyles: Record<string, string> = {
   paid: "bg-emerald-100 text-emerald-700",
   pending: "bg-red-100 text-red-700",
   partial: "bg-amber-100 text-amber-700",
 };
+
+const visitNoteTemplates = [
+  {
+    label: "Routine check-up",
+    note: {
+      subjective: "Patient presents for routine dental check-up.",
+      objective: "Oral examination completed. No acute findings noted.",
+      assessment: "Routine examination; no urgent concerns identified.",
+      plan: "Continue preventive care. Schedule next recall appointment.",
+    },
+  },
+  {
+    label: "Post-treatment review",
+    note: {
+      subjective: "Patient returns for a post-treatment review.",
+      objective: "Treatment site reviewed. Healing and response assessed.",
+      assessment: "Post-treatment review completed.",
+      plan: "Continue home care instructions and return if symptoms worsen.",
+    },
+  },
+  {
+    label: "Pain assessment",
+    note: {
+      subjective: "Patient reports pain or sensitivity in the affected area.",
+      objective: "Affected area examined; percussion, palpation, and soft tissue findings recorded.",
+      assessment: "Pain source assessed during clinical examination.",
+      plan: "Discussed treatment options, symptom management, and follow-up.",
+    },
+  },
+] as const;
 
 function formatCurrency(amount: number) {
   return `₦${amount.toLocaleString()}`;
@@ -55,6 +89,9 @@ export default function PatientProfilePage() {
   const canViewContact = ["owner", "admin", "receptionist"].includes(orgRole);
 
   const [editOpen, setEditOpen] = useState(false);
+  const [invoiceOpen, setInvoiceOpen] = useState(false);
+  const [prescriptionOpen, setPrescriptionOpen] = useState(false);
+  const [labCaseOpen, setLabCaseOpen] = useState(false);
   const [noteDialogOpen, setNoteDialogOpen] = useState(false);
   const [imageDialogOpen, setImageDialogOpen] = useState(false);
   const [docDialogOpen, setDocDialogOpen] = useState(false);
@@ -127,6 +164,17 @@ export default function PatientProfilePage() {
         <Button variant="outline" size="sm" onClick={() => setEditOpen(true)} data-tour="patients-detail-edit">
           <Pencil className="mr-2 h-4 w-4" /> Edit
         </Button>
+        <div className="flex flex-wrap items-center gap-2">
+          <Button variant="outline" size="sm" onClick={() => setInvoiceOpen(true)}>
+            <Receipt className="mr-2 h-4 w-4" /> Invoice
+          </Button>
+          <Button variant="outline" size="sm" onClick={() => setPrescriptionOpen(true)}>
+            <Pill className="mr-2 h-4 w-4" /> Prescription
+          </Button>
+          <Button variant="outline" size="sm" onClick={() => setLabCaseOpen(true)}>
+            <FlaskConical className="mr-2 h-4 w-4" /> Lab case
+          </Button>
+        </div>
         {outstandingBalance > 0 && (
           <div className="text-right" data-tour="patients-detail-balance">
             <p className="text-xs text-muted-foreground">Outstanding</p>
@@ -578,20 +626,46 @@ export default function PatientProfilePage() {
 
       <EditPatientDialog patient={patient} open={editOpen} onOpenChange={setEditOpen} />
 
+      <CreateInvoiceDialog open={invoiceOpen} onOpenChange={setInvoiceOpen} preselectedPatientId={patientId} />
+      <CreatePrescriptionDialog open={prescriptionOpen} onOpenChange={setPrescriptionOpen} preselectedPatientId={patientId} />
+      <CreateLabCaseDialog open={labCaseOpen} onOpenChange={setLabCaseOpen} preselectedPatientId={patientId} />
+
       {/* Clinical Note Dialog - Enhanced with complaint/diagnosis fields */}
       <Dialog open={noteDialogOpen} onOpenChange={setNoteDialogOpen}>
         <DialogContent>
           <DialogHeader><DialogTitle>Add SOAP Note</DialogTitle></DialogHeader>
           <div className="space-y-3">
-            <div className="space-y-1"><Label className="text-xs font-semibold text-blue-700">S — Patient Complaint</Label><Textarea value={noteForm.subjective} onChange={e => setNoteForm(f => ({ ...f, subjective: e.target.value }))} rows={2} placeholder="Patient complaints, symptoms, chief concern..." /></div>
-            <div className="space-y-1"><Label className="text-xs font-semibold text-green-700">O — Clinical Findings</Label><Textarea value={noteForm.objective} onChange={e => setNoteForm(f => ({ ...f, objective: e.target.value }))} rows={2} placeholder={terms.showDentalChart ? "Clinical exam, vitals, dental chart findings..." : "Clinical exam, vitals, examination findings..."} /></div>
-            <div className="space-y-1"><Label className="text-xs font-semibold text-amber-700">A — Diagnosis</Label><Textarea value={noteForm.assessment} onChange={e => setNoteForm(f => ({ ...f, assessment: e.target.value }))} rows={2} placeholder="Diagnosis, differential diagnosis..." /></div>
-            <div className="space-y-1"><Label className="text-xs font-semibold text-red-700">P — Treatment Plan</Label><Textarea value={noteForm.plan} onChange={e => setNoteForm(f => ({ ...f, plan: e.target.value }))} rows={2} placeholder="Treatment plan, prescriptions, follow-up..." /></div>
+            <div className="space-y-2">
+              <Label className="text-xs">Start from a template</Label>
+              <div className="flex flex-wrap gap-2">
+                {visitNoteTemplates.map((template) => (
+                  <Button
+                    key={template.label}
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="text-xs"
+                    onClick={() => setNoteForm({ ...template.note })}
+                  >
+                    <Zap className="mr-1 h-3 w-3" /> {template.label}
+                  </Button>
+                ))}
+              </div>
+            </div>
+            <div className="space-y-1"><Label className="text-xs font-semibold text-blue-700">S — Patient Complaint</Label><Textarea maxLength={2000} value={noteForm.subjective} onChange={e => setNoteForm(f => ({ ...f, subjective: e.target.value }))} rows={2} placeholder="Patient complaints, symptoms, chief concern..." /></div>
+            <div className="space-y-1"><Label className="text-xs font-semibold text-green-700">O — Clinical Findings</Label><Textarea maxLength={2000} value={noteForm.objective} onChange={e => setNoteForm(f => ({ ...f, objective: e.target.value }))} rows={2} placeholder={terms.showDentalChart ? "Clinical exam, vitals, dental chart findings..." : "Clinical exam, vitals, examination findings..."} /></div>
+            <div className="space-y-1"><Label className="text-xs font-semibold text-amber-700">A — Diagnosis</Label><Textarea maxLength={2000} value={noteForm.assessment} onChange={e => setNoteForm(f => ({ ...f, assessment: e.target.value }))} rows={2} placeholder="Diagnosis, differential diagnosis..." /></div>
+            <div className="space-y-1"><Label className="text-xs font-semibold text-red-700">P — Treatment Plan</Label><Textarea maxLength={2000} value={noteForm.plan} onChange={e => setNoteForm(f => ({ ...f, plan: e.target.value }))} rows={2} placeholder="Treatment plan, prescriptions, follow-up..." /></div>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setNoteDialogOpen(false)}>Cancel</Button>
             <Button className="bg-secondary hover:bg-secondary/90" disabled={createNote.isPending} onClick={() => {
-              createNote.mutate({ patient_id: patientId!, ...noteForm, created_by: user?.id }, {
+              const safeNote = Object.fromEntries(Object.entries(noteForm).map(([key, value]) => [key, value.trim().slice(0, 2000)])) as typeof noteForm;
+              if (!Object.values(safeNote).some(Boolean)) {
+                toast({ title: "Add at least one note section", variant: "destructive" });
+                return;
+              }
+              createNote.mutate({ patient_id: patientId!, ...safeNote, created_by: user?.id }, {
                 onSuccess: () => { setNoteDialogOpen(false); setNoteForm({ subjective: "", objective: "", assessment: "", plan: "" }); },
               });
             }}>{createNote.isPending ? "Saving..." : "Save Note"}</Button>
