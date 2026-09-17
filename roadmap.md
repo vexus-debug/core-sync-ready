@@ -1,7 +1,6 @@
 # Roadmap
 
-- [ ] Audit eye-care tables, routes, roles, and existing dashboard patterns
-- [ ] Build eye clinic navigation and dashboard
-- [ ] Add eye exams, diagnostics, prescriptions, and optical order workflows
-- [ ] Match the Sing App styling while retaining the existing theme
-- [ ] Validate desktop/mobile layouts and key interactions
+- [x] Add patient-page quick actions for invoices, prescriptions, and lab cases
+- [x] Add reusable SOAP note templates
+- [x] Offer invoice creation when completing a visit
+- [ ] Validate the finished workflows in the preview

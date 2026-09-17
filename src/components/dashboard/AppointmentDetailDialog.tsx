@@ -6,9 +6,14 @@ import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { useUpdateAppointment, type AppointmentRow } from "@/hooks/useAppointments";
 import { useDentists } from "@/hooks/useStaff";
 import { useClinicTerms } from "@/hooks/useClinicTerms";
+import { CreateInvoiceDialog } from "@/components/dashboard/CreateInvoiceDialog";
 
 const statusOptions = ["scheduled", "in-progress", "completed", "cancelled"];
 const chairs = ["Chair 1", "Chair 2", "Chair 3"];
@@ -29,6 +34,8 @@ export function AppointmentDetailDialog({ appointment, open, onOpenChange }: App
   const [staffId, setStaffId] = useState("");
   const [notes, setNotes] = useState("");
   const [time, setTime] = useState("");
+  const [billingPromptOpen, setBillingPromptOpen] = useState(false);
+  const [invoiceOpen, setInvoiceOpen] = useState(false);
 
   const startEdit = () => {
     if (!appointment) return;
@@ -57,6 +64,10 @@ export function AppointmentDetailDialog({ appointment, open, onOpenChange }: App
   const handleQuickStatus = async (newStatus: string) => {
     if (!appointment) return;
     await updateAppointment.mutateAsync({ id: appointment.id, status: newStatus });
+    if (newStatus === "completed") {
+      setBillingPromptOpen(true);
+      return;
+    }
     onOpenChange(false);
   };
 
@@ -70,14 +81,15 @@ export function AppointmentDetailDialog({ appointment, open, onOpenChange }: App
   };
 
   return (
-    <Dialog open={open} onOpenChange={(o) => { if (!o) setEditing(false); onOpenChange(o); }}>
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
-            Appointment Details
-            <Badge className={statusColors[appointment.status] || ""}>{appointment.status.replace("-", " ")}</Badge>
-          </DialogTitle>
-        </DialogHeader>
+    <>
+      <Dialog open={open} onOpenChange={(o) => { if (!o) setEditing(false); onOpenChange(o); }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              Appointment Details
+              <Badge className={statusColors[appointment.status] || ""}>{appointment.status.replace("-", " ")}</Badge>
+            </DialogTitle>
+          </DialogHeader>
 
         {editing ? (
           <div className="space-y-3">
@@ -163,7 +175,33 @@ export function AppointmentDetailDialog({ appointment, open, onOpenChange }: App
             </>
           )}
         </DialogFooter>
-      </DialogContent>
-    </Dialog>
+        </DialogContent>
+      </Dialog>
+
+      <AlertDialog open={billingPromptOpen} onOpenChange={setBillingPromptOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Visit completed</AlertDialogTitle>
+            <AlertDialogDescription>
+              Create an invoice for {appointment.treatments?.name || "this visit"} now?
+              {appointment.treatment_id ? " The patient and treatment are already selected." : " The patient is already selected."}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => onOpenChange(false)}>Not now</AlertDialogCancel>
+            <AlertDialogAction onClick={() => { setBillingPromptOpen(false); setInvoiceOpen(true); }}>
+              Create invoice
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <CreateInvoiceDialog
+        open={invoiceOpen}
+        onOpenChange={setInvoiceOpen}
+        preselectedPatientId={appointment.patient_id}
+        preselectedTreatmentIds={appointment.treatment_id ? [appointment.treatment_id] : undefined}
+      />
+    </>
   );
 }
